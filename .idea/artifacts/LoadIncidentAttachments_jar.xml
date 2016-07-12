@@ -4,10 +4,7 @@
     <root id="root">
       <element id="archive" name="LoadIncidentAttachments.jar">
         <element id="module-output" name="LoadIncidentAttachments" />
-        <element id="file-copy" path="C:/TMP/copyright.txt" />
-      </element>
-      <element id="directory" name="lib">
-        <element id="library" level="project" name="lib" />
+        <element id="file-copy" path="$PROJECT_DIR$/copyright.txt" />
       </element>
     </root>
   </artifact>
