@@ -8,7 +8,10 @@ package assyst.attachments;
 
 import com.microsoft.sqlserver.jdbc.SQLServerDataSource;
 import com.microsoft.sqlserver.jdbc.SQLServerException;
+import javafx.animation.Animation;
+import javafx.animation.FadeTransition;
 import javafx.application.Platform;
+import javafx.fxml.FXML;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -16,23 +19,124 @@ import javafx.scene.control.*;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.layout.GridPane;
+import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import javafx.util.Pair;
 
 import java.io.*;
 import java.sql.*;
 import java.util.Optional;
+import java.util.Properties;
 
 public class Controller {
 
     public Button downloadButton;
+    public Button changePathBtn;
     public TextField incidentNumber;
+    public TextField pathTextField;
     public ProgressBar downloadBar;
     public Label statusLabel;
-    private String login = "";
-    private String password = "";
-    private String saveDir = "C:\\TMP\\Download\\";
+
+    private FadeTransition ft;
+    private String login;
+    private String password;
+    private String saveDir;
+
+    @FXML
+    void initialize() {
+        login = "";
+        password = "";
+        initProgramSettings();
+
+        pathTextField.setText(saveDir);
+
+        ft = new FadeTransition(Duration.millis(900), statusLabel);
+        ft.setFromValue(0.0);
+        ft.setToValue(1.0);
+        ft.setCycleCount(Animation.INDEFINITE);
+        ft.setAutoReverse(true);
+        ft.play();
+    }
+
+    private Properties readPropertiesFile() {
+        Properties props = new Properties();
+        File f = new File("./settings.xml");
+        if (f.exists()) {
+            try {
+                InputStream is = new BufferedInputStream(new FileInputStream(f));
+                props.loadFromXML(is);
+                is.close();
+                return props;
+            } catch (IOException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private boolean savePropertiesToFile(Properties props) {
+        try {
+            OutputStream outputStream = new BufferedOutputStream(new FileOutputStream(new File("./settings.xml")));
+            props.storeToXML(outputStream, "", "UTF-8");
+            outputStream.flush();
+            outputStream.close();
+        } catch (IOException e) {
+            return false;
+        }
+        return true;
+    }
+
+    private void initProgramSettings() {
+        Properties props = readPropertiesFile();
+        if (props != null) {
+            login = props.getProperty("Login");
+            password = decrypt(props.getProperty("Password").getBytes(), login);
+            saveDir = props.getProperty("Path");
+            File myPath = new File(saveDir);
+            myPath.mkdirs();
+        } else {
+            saveDir = "C:\\Download\\";
+            File myPath = new File(saveDir);
+            myPath.mkdirs();
+            saveProgramSettings();
+        }
+    }
+
+    private void saveProgramSettings() {
+        Properties props = readPropertiesFile();
+        if (props != null) {
+            props.setProperty("Login", login);
+            props.setProperty("Password", new String(encrypt(password, login)));
+            props.setProperty("Path", saveDir);
+            savePropertiesToFile(props);
+        } else {
+            props = new Properties();
+            props.setProperty("Login", login);
+            props.setProperty("Password", new String(encrypt(password, login)));
+            props.setProperty("Path", saveDir);
+            savePropertiesToFile(props);
+        }
+    }
+
+    private void disableControls() {
+        downloadButton.setDisable(true);
+        incidentNumber.setDisable(true);
+        changePathBtn.setDisable(true);
+    }
+
+    private void enableControls() {
+        downloadButton.setDisable(false);
+        incidentNumber.setDisable(false);
+        changePathBtn.setDisable(false);
+    }
+
+    private void stopBlinking() {
+        ft.stop();
+        ft.setCycleCount(1);
+        ft.play();
+    }
 
     public void downloadAction() {
         final int[] fc = new int[1];
@@ -46,9 +150,10 @@ public class Controller {
         viewError.initModality(Modality.APPLICATION_MODAL);
         viewInfo.initModality(Modality.APPLICATION_MODAL);
 
-        viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon16.png").toString()));
-        viewInfoStage.getIcons().add(new Image(this.getClass().getResource("res/icon16.png").toString()));
+        viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
+        viewInfoStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
 
+        stopBlinking();
         if (incidentNumber.getText().length() > 0) {
             int b;
             try {
@@ -58,23 +163,14 @@ public class Controller {
             }
             if ((incidentNumber.getText().length() == 7) && (b > 1000000)) {
                 if (login.isEmpty() | password.isEmpty()) getLoginAndPassword();
-
-                downloadButton.setDisable(true);
-                incidentNumber.setDisable(true);
+                disableControls();
                 try {
                     int res = checkIncidentNumber(incidentNumber.getText());
                     if (res > 0) {
-                        //todo Доделать окно выбора папки
-/*                        DirectoryChooser directoryChooser = new DirectoryChooser();
-                        directoryChooser.setInitialDirectory(new File(saveDir));
-                        directoryChooser.setTitle("Выберите папку для сохранения выгружаемых вложений");
-                        File selectedDirectory = directoryChooser.showDialog(null);
-                        System.out.println(selectedDirectory.getAbsolutePath());
-*/
                         downloadBar.setVisible(true);
                         new Thread(() -> {
                             try {
-                                fc[0] = saveBLOBdataToFiles(incidentNumber.getText());
+                                fc[0] = saveBLOBDataToFiles(incidentNumber.getText());
                                 if (fc[0] > 0) {
                                     Platform.runLater(() -> {
                                         viewInfo.setTitle("Успешное сохранение");
@@ -100,22 +196,19 @@ public class Controller {
                             }
                             Platform.runLater(() -> {
                                 downloadBar.setVisible(false);
-                                downloadButton.setDisable(false);
                                 incidentNumber.setText("");
-                                incidentNumber.setDisable(false);
+                                enableControls();
                             });
                         }).start();
                     }
                     if ((res != -1) && (res == 0)) {
-                        downloadButton.setDisable(false);
-                        incidentNumber.setDisable(false);
+                        enableControls();
                         viewError.setTitle("Ошибка");
                         viewError.setHeaderText("Похоже, Вы ввели некорректный номер инцидента!");
                         viewError.setContentText("Проверьте правильность ввода номера инцидента. Не вводите преффиксы (T, R и др.). Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
                         viewError.showAndWait();
                     } else {
-                        downloadButton.setDisable(false);
-                        incidentNumber.setDisable(false);
+                        enableControls();
                     }
                 } catch (SQLException e) {
                     e.printStackTrace();
@@ -140,7 +233,7 @@ public class Controller {
         dialog.setHeaderText("Пройдите аутентификацию");
 
         Stage stage = (Stage) dialog.getDialogPane().getScene().getWindow();
-        stage.getIcons().add(new Image(this.getClass().getResource("res/icon16.png").toString()));
+        stage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
         stage.setAlwaysOnTop(true);
 
         dialog.initModality(Modality.APPLICATION_MODAL);
@@ -154,17 +247,19 @@ public class Controller {
         grid.setAlignment(Pos.TOP_CENTER);
         grid.setHgap(10);
         grid.setVgap(10);
-        grid.setPadding(new Insets(20, 150, 10, 10));
+        grid.setPadding(new Insets(20, 100, 10, 10));
 
         TextField username = new TextField();
         username.setPromptText("Введите логин");
         PasswordField pass = new PasswordField();
         pass.setPromptText("Введите пароль");
+        CheckBox saveCredBox = new CheckBox("Сохранить");
 
         grid.add(new Label("Логин:"), 0, 0);
         grid.add(username, 1, 0);
         grid.add(new Label("Пароль:"), 0, 1);
         grid.add(pass, 1, 1);
+        grid.add(saveCredBox, 1, 3);
 
         Node loginButton = dialog.getDialogPane().lookupButton(loginButtonType);
         loginButton.setDisable(true);
@@ -190,13 +285,15 @@ public class Controller {
         result.ifPresent(usernamePassword -> {
             login = usernamePassword.getKey();
             password = usernamePassword.getValue();
+//            todo Добавить проверку на успешное подключение к БД с выбранным логином и паролем
+            if (saveCredBox.isSelected()) saveProgramSettings();
         });
         return false;
     }
 
     private int checkIncidentNumber(String incident) throws SQLException {
-        Connection con = null;
-        ResultSet rs = null;
+        Connection con;
+        ResultSet rs;
         String sqlQuery = "SELECT count(*) AS \"count\" FROM incident WHERE incident_ref = %s;";
         sqlQuery = String.format(sqlQuery, incident);
         con = getDBConnection(login, password);
@@ -225,7 +322,7 @@ public class Controller {
         return "";
     }
 
-    private int saveBLOBdataToFiles(String incident) throws SQLException, FileNotFoundException {
+    private int saveBLOBDataToFiles(String incident) throws SQLException, FileNotFoundException {
         int filesCount = 0;
         String sqlQuery = "SELECT ole_filename, ole_item FROM ole_items WHERE aux_source_id = 1%s;";
         sqlQuery = String.format(sqlQuery, incident);
@@ -273,11 +370,11 @@ public class Controller {
         } catch (SQLServerException e) {
             this.login = "";
             this.password = "";
-
+            saveProgramSettings();
             Alert viewError = new Alert(Alert.AlertType.ERROR);
 
             Stage viewErrorStage = (Stage) viewError.getDialogPane().getScene().getWindow();
-            viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon16.png").toString()));
+            viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
             viewErrorStage.setAlwaysOnTop(true);
             viewError.initModality(Modality.APPLICATION_MODAL);
 
@@ -296,5 +393,35 @@ public class Controller {
             e.printStackTrace();
         }
         return null;
+    }
+
+    public void changePath() {
+        stopBlinking();
+        DirectoryChooser directoryChooser = new DirectoryChooser();
+        directoryChooser.setInitialDirectory(new File(saveDir));
+        directoryChooser.setTitle("Выберите папку для сохранения выгружаемых вложений");
+        File selectedDirectory = directoryChooser.showDialog(null);
+        saveDir = selectedDirectory.getAbsolutePath() + "\\";
+        pathTextField.setText(saveDir);
+        saveProgramSettings();
+    }
+
+    private byte[] encrypt(String text, String keyWord) {
+        byte[] arr = text.getBytes();
+        byte[] keyarr = keyWord.getBytes();
+        byte[] result = new byte[arr.length];
+        for (int i = 0; i < arr.length; i++) {
+            result[i] = (byte) (arr[i] ^ keyarr[i % keyarr.length]);
+        }
+        return result;
+    }
+
+    private String decrypt(byte[] text, String keyWord) {
+        byte[] result = new byte[text.length];
+        byte[] keyarr = keyWord.getBytes();
+        for (int i = 0; i < text.length; i++) {
+            result[i] = (byte) (text[i] ^ keyarr[i % keyarr.length]);
+        }
+        return new String(result);
     }
 }

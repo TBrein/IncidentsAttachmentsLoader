@@ -20,8 +20,8 @@ public class Main extends Application {
     public void start(Stage primaryStage) throws Exception {
         Parent root = FXMLLoader.load(getClass().getResource("res/LoadIncidentAttachments.fxml"));
         primaryStage.setTitle("Incident Attach's Loader");
-        primaryStage.setScene(new Scene(root, 300, 100));
-        primaryStage.setAlwaysOnTop(true);
+        primaryStage.setScene(new Scene(root, 300, 130));
+//        primaryStage.setAlwaysOnTop(true);
         primaryStage.initStyle(StageStyle.DECORATED);
         primaryStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
         primaryStage.setResizable(false);
