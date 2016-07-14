@@ -38,6 +38,7 @@ public class Controller {
     public TextField pathTextField;
     public ProgressBar downloadBar;
     public Label statusLabel;
+    public CheckBox useIncidentNumAsFolder;
 
     private FadeTransition ft;
     private String login;
@@ -102,19 +103,22 @@ public class Controller {
     }
 
     private void makePath(File path) {
-        Alert viewError = new Alert(Alert.AlertType.ERROR);
-        Stage viewErrorStage = (Stage) viewError.getDialogPane().getScene().getWindow();
-        viewErrorStage.setAlwaysOnTop(true);
-        viewError.initModality(Modality.APPLICATION_MODAL);
-        viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
-
         if (!path.mkdirs() && !path.exists()) {
-            viewError.setTitle("Ошибка");
-            viewError.setHeaderText(null);
-            viewError.setContentText("Не удалось создать папку \"" + saveDir + "\"");
-            viewError.showAndWait();
+            Platform.runLater(() -> {
+                Alert viewError = new Alert(Alert.AlertType.ERROR);
+                Stage viewErrorStage = (Stage) viewError.getDialogPane().getScene().getWindow();
+                viewErrorStage.setAlwaysOnTop(true);
+                viewError.initModality(Modality.APPLICATION_MODAL);
+                viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
+
+                viewError.setTitle("Ошибка");
+                viewError.setHeaderText(null);
+                viewError.setContentText("Не удалось создать папку \"" + saveDir + "\"");
+                viewError.showAndWait();
+            });
         }
     }
+
     private void initProgramSettings() {
         Properties props = readPropertiesFile();
 
@@ -128,6 +132,7 @@ public class Controller {
             login = props.getProperty("Login");
             password = decrypt(props.getProperty("Password").getBytes(), login);
             saveDir = props.getProperty("Path");
+            useIncidentNumAsFolder.setSelected(Boolean.parseBoolean(props.getProperty("useIncidentNumAsFolder")));
             File myPath = new File(saveDir);
             makePath(myPath);
         } else {
@@ -144,26 +149,22 @@ public class Controller {
             props.setProperty("Login", login);
             props.setProperty("Password", new String(encrypt(password, login)));
             props.setProperty("Path", saveDir);
+            props.setProperty("useIncidentNumAsFolder", String.valueOf(useIncidentNumAsFolder.isSelected()));
             savePropertiesToFile(props);
         } else {
             props = new Properties();
             props.setProperty("Login", login);
             props.setProperty("Password", new String(encrypt(password, login)));
             props.setProperty("Path", saveDir);
+            props.setProperty("useIncidentNumAsFolder", String.valueOf(useIncidentNumAsFolder.isSelected()));
             savePropertiesToFile(props);
         }
     }
 
-    private void disableControls() {
-        downloadButton.setDisable(true);
-        incidentNumber.setDisable(true);
-        changePathBtn.setDisable(true);
-    }
-
-    private void enableControls() {
-        downloadButton.setDisable(false);
-        incidentNumber.setDisable(false);
-        changePathBtn.setDisable(false);
+    private void setDisableToControls(boolean enable) {
+        downloadButton.setDisable(enable);
+        incidentNumber.setDisable(enable);
+        changePathBtn.setDisable(enable);
     }
 
     private void stopBlinking() {
@@ -197,7 +198,7 @@ public class Controller {
             }
             if ((incidentNumber.getText().length() == 7) && (b > 1000000)) {
                 if (login.isEmpty() | password.isEmpty()) getLoginAndPassword();
-                disableControls();
+                setDisableToControls(true);
                 try {
                     int res = checkIncidentNumber(incidentNumber.getText());
                     if (res > 0) {
@@ -212,7 +213,8 @@ public class Controller {
                                         viewInfo.setContentText("Из инцидента " + incidentNumber.getText() + " выгружено " + fc[0] + " вложений.");
                                         viewInfo.showAndWait();
                                     });
-                                } else {
+                                }
+                                if (fc[0] == 0) {
                                     Platform.runLater(() -> {
                                         viewError.setTitle("Ошибка при сохранении");
                                         viewError.setHeaderText(null);
@@ -231,18 +233,18 @@ public class Controller {
                             Platform.runLater(() -> {
                                 downloadBar.setVisible(false);
                                 incidentNumber.setText("");
-                                enableControls();
+                                setDisableToControls(false);
                             });
                         }).start();
                     }
                     if ((res != -1) && (res == 0)) {
-                        enableControls();
+                        setDisableToControls(false);
                         viewError.setTitle("Ошибка");
                         viewError.setHeaderText("Похоже, Вы ввели некорректный номер инцидента!");
                         viewError.setContentText("Проверьте правильность ввода номера инцидента. Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
                         viewError.showAndWait();
                     } else {
-                        enableControls();
+                        setDisableToControls(false);
                     }
                 } catch (SQLException e) {
                     e.printStackTrace();
@@ -357,6 +359,7 @@ public class Controller {
     }
 
     private int saveBLOBDataToFiles(String incident) throws SQLException, FileNotFoundException {
+        File myPath;
         int filesCount = 0;
         String sqlQuery = "SELECT ole_filename, ole_item FROM ole_items WHERE aux_source_id = 1%s;";
         sqlQuery = String.format(sqlQuery, incident);
@@ -366,26 +369,52 @@ public class Controller {
             try {
                 Blob blob = rs.getBlob("ole_item");
                 InputStream inputStream = blob.getBinaryStream();
-//              создаем папку для выгрузки вложений
-                File myPath = new File(saveDir + incident + "\\");
-                makePath(myPath);
-//              проверяем есть ли уже такой файл
-                myPath = new File(saveDir + incident + "\\" + rs.getString("ole_filename"));
-                int i = 1;
-                while (myPath.exists()) {
-                    myPath = new File(saveDir + incident + "\\" + i + "_" + rs.getString("ole_filename"));
+                if (useIncidentNumAsFolder.isSelected()) {
+//                  создаем папку для выгрузки вложений
+                    myPath = new File(saveDir + incident + "\\");
+                    makePath(myPath);
+//                  проверяем есть ли уже такой файл
+                    myPath = new File(saveDir + incident + "\\" + rs.getString("ole_filename"));
+                    int i = 1;
+                    while (myPath.exists()) {
+                        myPath = new File(saveDir + incident + "\\" + i + "_" + rs.getString("ole_filename"));
+                        i++;
+                    }
+                } else {
+//                  создаем папку для выгрузки вложений
+                    myPath = new File(saveDir);
+                    makePath(myPath);
+//                  проверяем есть ли уже такой файл
+                    myPath = new File(saveDir + rs.getString("ole_filename"));
+                    int i = 1;
+                    while (myPath.exists()) {
+                        myPath = new File(saveDir + i + "_" + rs.getString("ole_filename"));
+                        i++;
+                    }
                 }
-                OutputStream outputStream = new FileOutputStream(myPath.getPath());
+                OutputStream outputStream = new FileOutputStream(myPath, false);
 
                 int bytesRead;
                 byte[] buffer = new byte[1024];
                 while ((bytesRead = inputStream.read(buffer)) != -1) {
                     outputStream.write(buffer, 0, bytesRead);
                 }
-                inputStream.close();
                 outputStream.close();
+                inputStream.close();
             } catch (IOException e) {
-                return filesCount;
+                Platform.runLater(() -> {
+                    Alert viewError = new Alert(Alert.AlertType.ERROR);
+                    Stage viewErrorStage = (Stage) viewError.getDialogPane().getScene().getWindow();
+                    viewErrorStage.setAlwaysOnTop(true);
+                    viewError.initModality(Modality.APPLICATION_MODAL);
+                    viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
+
+                    viewError.setTitle("Ошибка");
+                    viewError.setHeaderText(null);
+                    viewError.setContentText("При создании файла произошла ошибка. Нажмите OK для повторной попытки записи.");
+                    viewError.showAndWait();
+                });
+                return -1;
             }
         }
         if (rs != null) {
@@ -464,5 +493,9 @@ public class Controller {
             result[i] = (byte) (text[i] ^ keyarr[i % keyarr.length]);
         }
         return new String(result);
+    }
+
+    public void saveOption() {
+        saveProgramSettings();
     }
 }
