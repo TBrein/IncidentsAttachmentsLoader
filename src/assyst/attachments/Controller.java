@@ -240,7 +240,7 @@ public class Controller {
                     if ((res != -1) && (res == 0)) {
                         setDisableToControls(false);
                         viewError.setTitle("Ошибка");
-                        viewError.setHeaderText("Похоже, Вы ввели некорректный номер инцидента!");
+                        viewError.setHeaderText("В БД АССИСТ не существует инцидента с номером " + incidentNumber.getText());
                         viewError.setContentText("Проверьте правильность ввода номера инцидента. Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
                         viewError.showAndWait();
                     } else {
