@@ -50,6 +50,19 @@ public class Controller {
         password = "";
         initProgramSettings();
 
+        String numberMatcher = "[0-9]+";
+        //t1 - новый текст, s - старый текст.
+        incidentNumber.textProperty().addListener((observableValue, s, t1) -> {
+            if (!t1.isEmpty()) {
+                if (!t1.matches(numberMatcher)) {
+                    incidentNumber.setText(s);
+                } else {
+                    if (t1.length() > 7) {
+                        incidentNumber.setText(s);
+                    } else incidentNumber.setText(t1);
+                }
+            }
+        });
         pathTextField.setText(saveDir);
 
         ft = new FadeTransition(Duration.millis(900), statusLabel);
@@ -88,18 +101,39 @@ public class Controller {
         return true;
     }
 
+    private void makePath(File path) {
+        Alert viewError = new Alert(Alert.AlertType.ERROR);
+        Stage viewErrorStage = (Stage) viewError.getDialogPane().getScene().getWindow();
+        viewErrorStage.setAlwaysOnTop(true);
+        viewError.initModality(Modality.APPLICATION_MODAL);
+        viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
+
+        if (!path.mkdirs() && !path.exists()) {
+            viewError.setTitle("Ошибка");
+            viewError.setHeaderText(null);
+            viewError.setContentText("Не удалось создать папку \"" + saveDir + "\"");
+            viewError.showAndWait();
+        }
+    }
     private void initProgramSettings() {
         Properties props = readPropertiesFile();
+
+        Alert viewError = new Alert(Alert.AlertType.ERROR);
+        Stage viewErrorStage = (Stage) viewError.getDialogPane().getScene().getWindow();
+        viewErrorStage.setAlwaysOnTop(true);
+        viewError.initModality(Modality.APPLICATION_MODAL);
+        viewErrorStage.getIcons().add(new Image(this.getClass().getResource("res/icon32.png").toString()));
+
         if (props != null) {
             login = props.getProperty("Login");
             password = decrypt(props.getProperty("Password").getBytes(), login);
             saveDir = props.getProperty("Path");
             File myPath = new File(saveDir);
-            myPath.mkdirs();
+            makePath(myPath);
         } else {
             saveDir = "C:\\Download\\";
             File myPath = new File(saveDir);
-            myPath.mkdirs();
+            makePath(myPath);
             saveProgramSettings();
         }
     }
@@ -205,7 +239,7 @@ public class Controller {
                         enableControls();
                         viewError.setTitle("Ошибка");
                         viewError.setHeaderText("Похоже, Вы ввели некорректный номер инцидента!");
-                        viewError.setContentText("Проверьте правильность ввода номера инцидента. Не вводите преффиксы (T, R и др.). Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
+                        viewError.setContentText("Проверьте правильность ввода номера инцидента. Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
                         viewError.showAndWait();
                     } else {
                         enableControls();
@@ -216,13 +250,13 @@ public class Controller {
             } else {
                 viewError.setTitle("Ошибка");
                 viewError.setHeaderText("Похоже, Вы ввели некорректный номер инцидента!");
-                viewError.setContentText("Проверьте правильность ввода номера инцидента. Не вводите преффиксы (T, R и др.). Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
+                viewError.setContentText("Проверьте правильность ввода номера инцидента. Номер инцидента должен содержать 7 цифр.\nПример: 2046188 или 2041272");
                 viewError.showAndWait();
             }
         } else {
             viewError.setTitle("Ошибка");
             viewError.setHeaderText("Введите номер инцидента!");
-            viewError.setContentText("Не вводите преффиксы (T, R и др.). Номер инцидента должен содержать 7 цифр.\nПример, 2046188 или 2041272");
+            viewError.setContentText("Номер инцидента должен содержать 7 цифр.\nПример, 2046188 или 2041272");
             viewError.showAndWait();
         }
     }
@@ -332,9 +366,16 @@ public class Controller {
             try {
                 Blob blob = rs.getBlob("ole_item");
                 InputStream inputStream = blob.getBinaryStream();
+//              создаем папку для выгрузки вложений
                 File myPath = new File(saveDir + incident + "\\");
-                myPath.mkdirs();
-                OutputStream outputStream = new FileOutputStream(saveDir + incident + "\\" + rs.getString("ole_filename"));
+                makePath(myPath);
+//              проверяем есть ли уже такой файл
+                myPath = new File(saveDir + incident + "\\" + rs.getString("ole_filename"));
+                int i = 1;
+                while (myPath.exists()) {
+                    myPath = new File(saveDir + incident + "\\" + i + "_" + rs.getString("ole_filename"));
+                }
+                OutputStream outputStream = new FileOutputStream(myPath.getPath());
 
                 int bytesRead;
                 byte[] buffer = new byte[1024];
