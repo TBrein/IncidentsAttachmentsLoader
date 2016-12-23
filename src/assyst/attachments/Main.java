@@ -29,6 +29,14 @@ public class Main extends Application {
     }
 
     public static void main(String[] args) {
-        launch(args);
+        if (args.length == 0) {
+            launch(args);
+        } else {
+            System.out.println("Режим командной строки включен.");
+            System.out.println("IAL версия 0.2");
+            System.out.println("Переданный параметр: " + args[args.length - 1]);
+            System.out.println("Работы окончены.");
+            System.exit(0);
+        }
     }
 }
