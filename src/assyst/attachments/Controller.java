@@ -54,6 +54,7 @@ public class Controller {
         String numberMatcher = "[0-9]+";
         //t1 - новый текст, s - старый текст.
         incidentNumber.textProperty().addListener((observableValue, s, t1) -> {
+            t1 = t1.trim();
             if (!t1.isEmpty()) {
                 if (!t1.matches(numberMatcher)) {
                     incidentNumber.setText(s);
@@ -300,9 +301,7 @@ public class Controller {
         Node loginButton = dialog.getDialogPane().lookupButton(loginButtonType);
         loginButton.setDisable(true);
 
-        pass.textProperty().addListener((observable, oldValue, newValue) -> {
-            loginButton.setDisable(oldValue.trim().isEmpty());
-        });
+        pass.textProperty().addListener((observable, oldValue, newValue) -> loginButton.setDisable(oldValue.trim().isEmpty()));
 
         dialog.getDialogPane().setContent(grid);
 
@@ -358,6 +357,14 @@ public class Controller {
         return "";
     }
 
+    private String getFilename(String fileName) {
+        return fileName.substring(0, fileName.lastIndexOf('.'));
+    }
+
+    private String getFileExt(String fileName) {
+        return fileName.substring(fileName.lastIndexOf('.'), fileName.length());
+    }
+
     private int saveBLOBDataToFiles(String incident) throws SQLException, FileNotFoundException {
         File myPath;
         int filesCount = 0;
@@ -374,10 +381,10 @@ public class Controller {
                     myPath = new File(saveDir + incident + "\\");
                     makePath(myPath);
 //                  проверяем есть ли уже такой файл
-                    myPath = new File(saveDir + incident + "\\" + rs.getString("ole_filename"));
+                    myPath = new File(saveDir + incident + "\\" + "[" + incident + "] " + rs.getString("ole_filename"));
                     int i = 1;
                     while (myPath.exists()) {
-                        myPath = new File(saveDir + incident + "\\" + i + "_" + rs.getString("ole_filename"));
+                        myPath = new File(saveDir + incident + "\\" + "[" + incident + "] " + getFilename(rs.getString("ole_filename")) + "_" + i + "_" + getFileExt(rs.getString("ole_filename")));
                         i++;
                     }
                 } else {
@@ -385,10 +392,10 @@ public class Controller {
                     myPath = new File(saveDir);
                     makePath(myPath);
 //                  проверяем есть ли уже такой файл
-                    myPath = new File(saveDir + rs.getString("ole_filename"));
+                    myPath = new File(saveDir + "[" + incident + "] " + rs.getString("ole_filename"));
                     int i = 1;
                     while (myPath.exists()) {
-                        myPath = new File(saveDir + i + "_" + rs.getString("ole_filename"));
+                        myPath = new File(saveDir + "[" + incident + "] " + getFilename(rs.getString("ole_filename")) + "_" + i + "_" + getFileExt(rs.getString("ole_filename")));
                         i++;
                     }
                 }
